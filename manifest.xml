@@ -14,5 +14,6 @@
   <depend package="dummy-dependency-n-1" />
   <depend package="dummy-dependency-n" />
   -->
+  <depend package="base/types" />
   <depend package="opencv" />
 </package>

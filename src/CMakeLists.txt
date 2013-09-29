@@ -1,7 +1,3 @@
-rock_library(camera_calib
-    SOURCES Dummy.cpp
-    HEADERS Dummy.hpp)
-
-rock_executable(camera_calib_bin Main.cpp
-    DEPS camera_calib)
+rock_executable(camera_calib_bin camera_calibration.cpp
+   DEPS_PKGCONFIG base-types opencv)
 

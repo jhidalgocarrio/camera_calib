@@ -1,3 +1,3 @@
-rock_testsuite(test suite.cpp
-   test_Dummy.cpp
-   DEPS camera_calib)
+#rock_testsuite(test suite.cpp
+#   test_Dummy.cpp
+#   DEPS camera_calib)
