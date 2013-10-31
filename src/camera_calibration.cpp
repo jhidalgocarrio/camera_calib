@@ -38,13 +38,15 @@ public:
 
                   << "Write_DetectedFeaturePoints" << bwritePoints
                   << "Write_extrinsicParameters"   << bwriteExtrinsics
-                  << "Write_outputFileName"  << outputFileName
+                  << "Write_outputFileNameLeft"  << outputFileNameLeft
+                  << "Write_outputFileNameRight"  << outputFileNameRight
 
                   << "Show_UndistortedImage" << showUndistorsed
 
                   << "Input_FlipAroundHorizontalAxis" << flipVertical
                   << "Input_Delay" << delay
-                  << "Input" << input
+                  << "InputLeft" << inputLeft
+                  << "InputRight" << inputRight
            << "}";
     }
     void read(const FileNode& node)                          //Read serialization for this class
@@ -57,12 +59,14 @@ public:
         node["Calibrate_FixAspectRatio"] >> aspectRatio;
         node["Write_DetectedFeaturePoints"] >> bwritePoints;
         node["Write_extrinsicParameters"] >> bwriteExtrinsics;
-        node["Write_outputFileName"] >> outputFileName;
+        node["Write_outputFileNameLeft"] >> outputFileNameLeft;
+        node["Write_outputFileNameRight"] >> outputFileNameRight;
         node["Calibrate_AssumeZeroTangentialDistortion"] >> calibZeroTangentDist;
         node["Calibrate_FixPrincipalPointAtTheCenter"] >> calibFixPrincipalPoint;
         node["Input_FlipAroundHorizontalAxis"] >> flipVertical;
         node["Show_UndistortedImage"] >> showUndistorsed;
-        node["Input"] >> input;
+        node["InputLeft"] >> inputLeft;
+        node["InputRight"] >> inputRight;
         node["Input_Delay"] >> delay;
         interprate();
     }
@@ -85,36 +89,41 @@ public:
             goodInput = false;
         }
 
-        if (input.empty())      // Check for valid input
+        if (inputLeft.empty())      // Check for valid inputLeft
                 inputType = INVALID;
         else
         {
-            if (input[0] >= '0' && input[0] <= '9')
+            if (inputLeft[0] >= '0' && inputLeft[0] <= '9')
             {
-                stringstream ss(input);
+                stringstream ss(inputLeft);
                 ss >> cameraID;
                 inputType = CAMERA;
             }
             else
             {
-                if (readStringList(input, imageList))
+                if (readStringList(inputLeft, imageListLeft))
                     {
+                        std::cout<<"Input: "<<inputLeft<<"\n";
                         inputType = IMAGE_LIST;
-                        nrFrames = (nrFrames < (int)imageList.size()) ? nrFrames : (int)imageList.size();
+                        nrFrames = (nrFrames < (int)imageListLeft.size()) ? nrFrames : (int)imageListLeft.size();
                     }
-                else
-                    inputType = VIDEO_FILE;
+                if (readStringList(inputRight, imageListRight))
+                    {
+                        std::cout<<"Input: "<<inputRight<<"\n";
+                        inputType = IMAGE_LIST;
+                        nrFrames = (nrFrames < (int)imageListRight.size()) ? nrFrames : (int)imageListRight.size();
+                    }
             }
             if (inputType == CAMERA)
                 inputCapture.open(cameraID);
             if (inputType == VIDEO_FILE)
-                inputCapture.open(input);
+                inputCapture.open(inputLeft);
             if (inputType != IMAGE_LIST && !inputCapture.isOpened())
                     inputType = INVALID;
         }
         if (inputType == INVALID)
         {
-            cerr << " Inexistent input: " << input;
+            cerr << " Inexistent input: " << inputLeft;
             goodInput = false;
         }
 
@@ -133,10 +142,11 @@ public:
                 cerr << " Inexistent camera calibration mode: " << patternToUse << endl;
                 goodInput = false;
             }
-        atImageList = 0;
+        atImageListLeft = 0;
+        atImageListRight = 0;
 
     }
-    Mat nextImage()
+    Mat nextLeftImage()
     {
         Mat result;
         if( inputCapture.isOpened() )
@@ -145,8 +155,31 @@ public:
             inputCapture >> view0;
             view0.copyTo(result);
         }
-        else if( atImageList < (int)imageList.size() )
-            result = imread(imageList[atImageList++], CV_LOAD_IMAGE_COLOR);
+        else if( atImageListLeft < (int)imageListLeft.size() )
+        {
+            std::cout<<"Opening: "<<imageListLeft[atImageListLeft]<<"\n";
+            result = imread(imageListLeft[atImageListLeft++], CV_LOAD_IMAGE_COLOR);
+
+        }
+
+        return result;
+    }
+
+    Mat nextRightImage()
+    {
+        Mat result;
+        if( inputCapture.isOpened() )
+        {
+            Mat view0;
+            inputCapture >> view0;
+            view0.copyTo(result);
+        }
+        else if( atImageListRight < (int)imageListRight.size() )
+        {
+            std::cout<<"Opening: "<<imageListRight[atImageListRight]<<"\n";
+            result = imread(imageListRight[atImageListRight++], CV_LOAD_IMAGE_COLOR);
+
+        }
 
         return result;
     }
@@ -177,15 +210,19 @@ public:
     bool calibZeroTangentDist; // Assume zero tangential distortion
     bool calibFixPrincipalPoint;// Fix the principal point at the center
     bool flipVertical;          // Flip the captured images around the horizontal axis
-    string outputFileName;      // The name of the file where to write
+    string outputFileNameLeft;      // The name of the file where to write
+    string outputFileNameRight;      // The name of the file where to write
     bool showUndistorsed;       // Show undistorted images after calibration
-    string input;               // The input ->
+    string inputLeft;               // The inputLeft ->
+    string inputRight;               // The inputRight ->
 
 
 
     int cameraID;
-    vector<string> imageList;
-    int atImageList;
+    vector<string> imageListLeft;
+    vector<string> imageListRight;
+    int atImageListLeft;
+    int atImageListRight;
     VideoCapture inputCapture;
     InputType inputType;
     bool goodInput;
@@ -207,7 +244,7 @@ static void read(const FileNode& node, Settings& x, const Settings& default_valu
 
 enum { DETECTION = 0, CAPTURING = 1, CALIBRATED = 2 };
 
-bool runCalibrationAndSave(Settings& s, Size imageSize, Mat&  cameraMatrix, Mat& distCoeffs,
+bool runCalibrationAndSave(Settings& s, std::string& outputFileName, Size imageSize, Mat&  cameraMatrix, Mat& distCoeffs,
                            vector<vector<Point2f> > imagePoints );
 
 int main(int argc, char* argv[])
@@ -230,40 +267,43 @@ int main(int argc, char* argv[])
         return -1;
     }
 
-    vector<vector<Point2f> > imagePoints;
-    Mat cameraMatrix, distCoeffs;
+    vector<vector<Point2f> > imagePointsLeft;
+    vector<vector<Point2f> > imagePointsRight;
+    Mat cameraMatrixLeft, distCoeffsLeft;
+    Mat cameraMatrixRight, distCoeffsRight;
     Size imageSize;
     int mode = s.inputType == Settings::IMAGE_LIST ? CAPTURING : DETECTION;
     clock_t prevTimestamp = 0;
     const Scalar RED(0,0,255), GREEN(0,255,0);
     const char ESC_KEY = 27;
 
+    /* PROCESS LEFT IMAGES **/
     for(int i = 0;;++i)
     {
-      Mat view;
+      Mat viewLeft;
       bool blinkOutput = false;
 
-      view = s.nextImage();
+      viewLeft = s.nextLeftImage();
 
       //-----  If no more image, or got enough, then stop calibration and show result -------------
-      if( mode == CAPTURING && imagePoints.size() >= (unsigned)s.nrFrames )
+      if( mode == CAPTURING && imagePointsLeft.size() >= (unsigned)s.nrFrames )
       {
-          if( runCalibrationAndSave(s, imageSize,  cameraMatrix, distCoeffs, imagePoints))
+          if( runCalibrationAndSave(s, s.outputFileNameLeft, imageSize,  cameraMatrixLeft, distCoeffsLeft, imagePointsLeft))
               mode = CALIBRATED;
           else
               mode = DETECTION;
       }
-      if(view.empty())          // If no more images then run calibration, save and stop loop.
+      if(viewLeft.empty())          // If no more images then run calibration, save and stop loop.
       {
-            if( imagePoints.size() > 0 )
-                runCalibrationAndSave(s, imageSize,  cameraMatrix, distCoeffs, imagePoints);
+            if( imagePointsLeft.size() > 0 )
+                runCalibrationAndSave(s, s.outputFileNameLeft, imageSize,  cameraMatrixLeft, distCoeffsLeft, imagePointsLeft);
             break;
       }
 
 
 
-        imageSize = view.size();  // Format input image.
-        if( s.flipVertical )    flip( view, view, 0 );
+        imageSize = viewLeft.size();  // Format input image.
+        if( s.flipVertical )    flip( viewLeft, viewLeft, 0 );
 
         vector<Point2f> pointBuf;
 
@@ -271,14 +311,14 @@ int main(int argc, char* argv[])
         switch( s.calibrationPattern ) // Find feature points on the input format
         {
         case Settings::CHESSBOARD:
-            found = findChessboardCorners( view, s.boardSize, pointBuf,
+            found = findChessboardCorners( viewLeft, s.boardSize, pointBuf,
                 CV_CALIB_CB_ADAPTIVE_THRESH | CV_CALIB_CB_FAST_CHECK | CV_CALIB_CB_NORMALIZE_IMAGE);
             break;
         case Settings::CIRCLES_GRID:
-            found = findCirclesGrid( view, s.boardSize, pointBuf );
+            found = findCirclesGrid( viewLeft, s.boardSize, pointBuf );
             break;
         case Settings::ASYMMETRIC_CIRCLES_GRID:
-            found = findCirclesGrid( view, s.boardSize, pointBuf, CALIB_CB_ASYMMETRIC_GRID );
+            found = findCirclesGrid( viewLeft, s.boardSize, pointBuf, CALIB_CB_ASYMMETRIC_GRID );
             break;
         default:
             found = false;
@@ -290,22 +330,22 @@ int main(int argc, char* argv[])
               // improve the found corners' coordinate accuracy for chessboard
                 if( s.calibrationPattern == Settings::CHESSBOARD)
                 {
-                    Mat viewGray;
-                    cvtColor(view, viewGray, CV_BGR2GRAY);
-                    cornerSubPix( viewGray, pointBuf, Size(11,11),
+                    Mat viewLeftGray;
+                    cvtColor(viewLeft, viewLeftGray, CV_BGR2GRAY);
+                    cornerSubPix( viewLeftGray, pointBuf, Size(11,11),
                         Size(-1,-1), TermCriteria( CV_TERMCRIT_EPS+CV_TERMCRIT_ITER, 30, 0.1 ));
                 }
 
                 if( mode == CAPTURING &&  // For camera only take new samples after delay time
                     (!s.inputCapture.isOpened() || clock() - prevTimestamp > s.delay*1e-3*CLOCKS_PER_SEC) )
                 {
-                    imagePoints.push_back(pointBuf);
+                    imagePointsLeft.push_back(pointBuf);
                     prevTimestamp = clock();
                     blinkOutput = s.inputCapture.isOpened();
                 }
 
                 // Draw the corners.
-                drawChessboardCorners( view, s.boardSize, Mat(pointBuf), found );
+                drawChessboardCorners( viewLeft, s.boardSize, Mat(pointBuf), found );
         }
 
         //----------------------------- Output Text ------------------------------------------------
@@ -313,30 +353,30 @@ int main(int argc, char* argv[])
                       mode == CALIBRATED ? "Calibrated" : "Press 'g' to start";
         int baseLine = 0;
         Size textSize = getTextSize(msg, 1, 1, 1, &baseLine);
-        Point textOrigin(view.cols - 2*textSize.width - 10, view.rows - 2*baseLine - 10);
+        Point textOrigin(viewLeft.cols - 2*textSize.width - 10, viewLeft.rows - 2*baseLine - 10);
 
         if( mode == CAPTURING )
         {
             if(s.showUndistorsed)
-                msg = format( "%d/%d Undist", (int)imagePoints.size(), s.nrFrames );
+                msg = format( "%d/%d Undist", (int)imagePointsLeft.size(), s.nrFrames );
             else
-                msg = format( "%d/%d", (int)imagePoints.size(), s.nrFrames );
+                msg = format( "%d/%d", (int)imagePointsLeft.size(), s.nrFrames );
         }
 
-        putText( view, msg, textOrigin, 1, 1, mode == CALIBRATED ?  GREEN : RED);
+        putText( viewLeft, msg, textOrigin, 1, 1, mode == CALIBRATED ?  GREEN : RED);
 
         if( blinkOutput )
-            bitwise_not(view, view);
+            bitwise_not(viewLeft, viewLeft);
 
         //------------------------- Video capture  output  undistorted ------------------------------
         if( mode == CALIBRATED && s.showUndistorsed )
         {
-            Mat temp = view.clone();
-            undistort(temp, view, cameraMatrix, distCoeffs);
+            Mat temp = viewLeft.clone();
+            undistort(temp, viewLeft, cameraMatrixLeft, distCoeffsLeft);
         }
 
         //------------------------------ Show image and check for input commands -------------------
-        imshow("Image View", view);
+        imshow("Image View", viewLeft);
         char key = (char)waitKey(s.inputCapture.isOpened() ? 50 : s.delay);
 
         if( key  == ESC_KEY )
@@ -348,21 +388,137 @@ int main(int argc, char* argv[])
         if( s.inputCapture.isOpened() && key == 'g' )
         {
             mode = CAPTURING;
-            imagePoints.clear();
+            imagePointsLeft.clear();
         }
     }
+
+    /** PROCESS RIGHT IMAGE **/
+    for(int i = 0;;++i)
+    {
+      Mat viewRight;
+      bool blinkOutput = false;
+
+      viewRight = s.nextRightImage();
+
+      //-----  If no more image, or got enough, then stop calibration and show result -------------
+      if( mode == CAPTURING && imagePointsRight.size() >= (unsigned)s.nrFrames )
+      {
+          if( runCalibrationAndSave(s, s.outputFileNameRight, imageSize,  cameraMatrixRight, distCoeffsRight, imagePointsRight))
+              mode = CALIBRATED;
+          else
+              mode = DETECTION;
+      }
+      if(viewRight.empty())          // If no more images then run calibration, save and stop loop.
+      {
+            if( imagePointsRight.size() > 0 )
+                runCalibrationAndSave(s, s.outputFileNameRight, imageSize,  cameraMatrixRight, distCoeffsRight, imagePointsRight);
+            break;
+      }
+
+
+
+        imageSize = viewRight.size();  // Format input image.
+        if( s.flipVertical )    flip( viewRight, viewRight, 0 );
+
+        vector<Point2f> pointBuf;
+
+        bool found;
+        switch( s.calibrationPattern ) // Find feature points on the input format
+        {
+        case Settings::CHESSBOARD:
+            found = findChessboardCorners( viewRight, s.boardSize, pointBuf,
+                CV_CALIB_CB_ADAPTIVE_THRESH | CV_CALIB_CB_FAST_CHECK | CV_CALIB_CB_NORMALIZE_IMAGE);
+            break;
+        case Settings::CIRCLES_GRID:
+            found = findCirclesGrid( viewRight, s.boardSize, pointBuf );
+            break;
+        case Settings::ASYMMETRIC_CIRCLES_GRID:
+            found = findCirclesGrid( viewRight, s.boardSize, pointBuf, CALIB_CB_ASYMMETRIC_GRID );
+            break;
+        default:
+            found = false;
+            break;
+        }
+
+        if ( found)                // If done with success,
+        {
+              // improve the found corners' coordinate accuracy for chessboard
+                if( s.calibrationPattern == Settings::CHESSBOARD)
+                {
+                    Mat viewRightGray;
+                    cvtColor(viewRight, viewRightGray, CV_BGR2GRAY);
+                    cornerSubPix( viewRightGray, pointBuf, Size(11,11),
+                        Size(-1,-1), TermCriteria( CV_TERMCRIT_EPS+CV_TERMCRIT_ITER, 30, 0.1 ));
+                }
+
+                if( mode == CAPTURING &&  // For camera only take new samples after delay time
+                    (!s.inputCapture.isOpened() || clock() - prevTimestamp > s.delay*1e-3*CLOCKS_PER_SEC) )
+                {
+                    imagePointsRight.push_back(pointBuf);
+                    prevTimestamp = clock();
+                    blinkOutput = s.inputCapture.isOpened();
+                }
+
+                // Draw the corners.
+                drawChessboardCorners( viewRight, s.boardSize, Mat(pointBuf), found );
+        }
+
+        //----------------------------- Output Text ------------------------------------------------
+        string msg = (mode == CAPTURING) ? "100/100" :
+                      mode == CALIBRATED ? "Calibrated" : "Press 'g' to start";
+        int baseLine = 0;
+        Size textSize = getTextSize(msg, 1, 1, 1, &baseLine);
+        Point textOrigin(viewRight.cols - 2*textSize.width - 10, viewRight.rows - 2*baseLine - 10);
+
+        if( mode == CAPTURING )
+        {
+            if(s.showUndistorsed)
+                msg = format( "%d/%d Undist", (int)imagePointsRight.size(), s.nrFrames );
+            else
+                msg = format( "%d/%d", (int)imagePointsRight.size(), s.nrFrames );
+        }
+
+        putText( viewRight, msg, textOrigin, 1, 1, mode == CALIBRATED ?  GREEN : RED);
+
+        if( blinkOutput )
+            bitwise_not(viewRight, viewRight);
+
+        //------------------------- Video capture  output  undistorted ------------------------------
+        if( mode == CALIBRATED && s.showUndistorsed )
+        {
+            Mat temp = viewRight.clone();
+            undistort(temp, viewRight, cameraMatrixRight, distCoeffsRight);
+        }
+
+        //------------------------------ Show image and check for input commands -------------------
+        imshow("Image View", viewRight);
+        char key = (char)waitKey(s.inputCapture.isOpened() ? 50 : s.delay);
+
+        if( key  == ESC_KEY )
+            break;
+
+        if( key == 'u' && mode == CALIBRATED )
+           s.showUndistorsed = !s.showUndistorsed;
+
+        if( s.inputCapture.isOpened() && key == 'g' )
+        {
+            mode = CAPTURING;
+            imagePointsRight.clear();
+        }
+    }
+
 
     // -----------------------Show the undistorted image for the image list ------------------------
     if( s.inputType == Settings::IMAGE_LIST && s.showUndistorsed )
     {
         Mat view, rview, map1, map2;
-        initUndistortRectifyMap(cameraMatrix, distCoeffs, Mat(),
-            getOptimalNewCameraMatrix(cameraMatrix, distCoeffs, imageSize, 1, imageSize, 0),
+        initUndistortRectifyMap(cameraMatrixLeft, distCoeffsLeft, Mat(),
+            getOptimalNewCameraMatrix(cameraMatrixLeft, distCoeffsLeft, imageSize, 1, imageSize, 0),
             imageSize, CV_16SC2, map1, map2);
 
-        for(int i = 0; i < (int)s.imageList.size(); i++ )
+        for(int i = 0; i < (int)s.imageListLeft.size(); i++ )
         {
-            view = imread(s.imageList[i], 1);
+            view = imread(s.imageListLeft[i], 1);
             if(view.empty())
                 continue;
             remap(view, rview, map1, map2, INTER_LINEAR);
@@ -373,6 +529,26 @@ int main(int argc, char* argv[])
         }
     }
 
+    if( s.inputType == Settings::IMAGE_LIST && s.showUndistorsed )
+    {
+        Mat view, rview, map1, map2;
+        initUndistortRectifyMap(cameraMatrixRight, distCoeffsRight, Mat(),
+            getOptimalNewCameraMatrix(cameraMatrixRight, distCoeffsRight, imageSize, 1, imageSize, 0),
+            imageSize, CV_16SC2, map1, map2);
+
+        for(int i = 0; i < (int)s.imageListRight.size(); i++ )
+        {
+            view = imread(s.imageListLeft[i], 1);
+            if(view.empty())
+                continue;
+            remap(view, rview, map1, map2, INTER_LINEAR);
+            imshow("Image View", rview);
+            char c = (char)waitKey();
+            if( c  == ESC_KEY || c == 'q' || c == 'Q' )
+                break;
+        }
+    }
+    //------------------------ Perform stereo calibration -------------------------------
 
     return 0;
 }
@@ -458,12 +634,12 @@ static bool runCalibration( Settings& s, Size& imageSize, Mat& cameraMatrix, Mat
 }
 
 // Print camera parameters to the output file
-static void saveCameraParams( Settings& s, Size& imageSize, Mat& cameraMatrix, Mat& distCoeffs,
+static void saveCameraParams( Settings& s, std::string &outputFileName, Size& imageSize, Mat& cameraMatrix, Mat& distCoeffs,
                               const vector<Mat>& rvecs, const vector<Mat>& tvecs,
                               const vector<float>& reprojErrs, const vector<vector<Point2f> >& imagePoints,
                               double totalAvgErr )
 {
-    FileStorage fs( s.outputFileName, FileStorage::WRITE );
+    FileStorage fs( outputFileName, FileStorage::WRITE );
 
     time_t tm;
     time( &tm );
@@ -536,7 +712,7 @@ static void saveCameraParams( Settings& s, Size& imageSize, Mat& cameraMatrix, M
     }
 }
 
-bool runCalibrationAndSave(Settings& s, Size imageSize, Mat&  cameraMatrix, Mat& distCoeffs,vector<vector<Point2f> > imagePoints )
+bool runCalibrationAndSave(Settings& s, std::string &outputFileName,Size imageSize, Mat&  cameraMatrix, Mat& distCoeffs,vector<vector<Point2f> > imagePoints )
 {
     vector<Mat> rvecs, tvecs;
     vector<float> reprojErrs;
@@ -548,7 +724,7 @@ bool runCalibrationAndSave(Settings& s, Size imageSize, Mat&  cameraMatrix, Mat&
         << ". avg re projection error = "  << totalAvgErr ;
 
     if( ok )
-        saveCameraParams( s, imageSize, cameraMatrix, distCoeffs, rvecs ,tvecs, reprojErrs,
+        saveCameraParams( s, outputFileName, imageSize, cameraMatrix, distCoeffs, rvecs ,tvecs, reprojErrs,
                             imagePoints, totalAvgErr);
     return ok;
 }

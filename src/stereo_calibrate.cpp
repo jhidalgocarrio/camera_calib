@@ -30,16 +30,18 @@
 
 */
 
-#include "cv.h"
-#include "cxmisc.h"
-#include "highgui.h"
-#include "cvaux.h"
 #include <vector>
 #include <string>
 #include <algorithm>
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
+
+#include <opencv2/imgproc/imgproc_c.h>
+#include <opencv2/core/core.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/calib3d/calib3d.hpp>
+#include <opencv2/highgui/highgui.hpp>
 
 using namespace std;
 
@@ -431,6 +433,6 @@ int main(int argc, char *argv[])
 
     if(fail != 0) return 1;
 
-    StereoCalib(argv[1], nx, ny, 0, squareSize);
+    StereoCalib(argv[1], nx, ny, 2, squareSize);
     return 0;
 }

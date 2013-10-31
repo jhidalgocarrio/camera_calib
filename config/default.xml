@@ -11,12 +11,8 @@
   <!-- The type of input used for camera calibration. One of: CHESSBOARD CIRCLES_GRID ASYMMETRIC_CIRCLES_GRID -->
   <Calibrate_Pattern>"CHESSBOARD"</Calibrate_Pattern>
   
-  <!-- The input to use for calibration. 
-		To use an input camera -> give the ID of the camera, like "1"
-		To use an input video  -> give the path of the input video, like "/tmp/x.avi"
-		To use an image list   -> give the path to the XML or YAML file containing the list of the images, like "/tmp/circles_list.xml"
-		-->
-  <Input>"/media/misdatos/DFKI/esa-npi/npi-dev/image_processing/camera_calib/config/example/images.xml"</Input>
+  <InputLeft>"config/calib_images/images_left.xml"</InputLeft>
+  <InputRight>"config/calib_images/images_right.xml"</InputRight>
   <!-- <Input>"0"</Input> -->
   <!--  If true (non-zero) we flip the input images around the horizontal axis.-->
   <Input_FlipAroundHorizontalAxis>0</Input_FlipAroundHorizontalAxis>
@@ -25,7 +21,7 @@
   <Input_Delay>100</Input_Delay>	
   
   <!-- How many frames to use, for calibration. -->
-  <Calibrate_NrOfFrameToUse>25</Calibrate_NrOfFrameToUse>
+  <Calibrate_NrOfFrameToUse>52</Calibrate_NrOfFrameToUse>
   <!-- Consider only fy as a free parameter, the ratio fx/fy stays the same as in the input cameraMatrix. 
 	   Use or not setting. 0 - False Non-Zero - True-->
   <Calibrate_FixAspectRatio> 1 </Calibrate_FixAspectRatio>
@@ -35,7 +31,8 @@
   <Calibrate_FixPrincipalPointAtTheCenter> 1 </Calibrate_FixPrincipalPointAtTheCenter>
   
   <!-- The name of the output log file. -->
-  <Write_outputFileName>"out_camera_data.yml"</Write_outputFileName>
+  <Write_outputFileNameLeft>"out_camera_left_data.yml"</Write_outputFileNameLeft>
+  <Write_outputFileNameRight>"out_camera_right_data.yml"</Write_outputFileNameRight>
   <!-- If true (non-zero) we write to the output file the feature points.-->
   <Write_DetectedFeaturePoints>1</Write_DetectedFeaturePoints>
   <!-- If true (non-zero) we write to the output file the extrinsic camera parameters.-->
